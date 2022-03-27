@@ -23,7 +23,7 @@ It's a rest client that also supports x-www-form-urlencoded.
 This library adds another wrapper to the rest client which provides a circuit breaker.
 
 We currently use [sony/gobreaker](https://github.com/sony/gobreaker), which is a very lightweight
-implementation with a small dependency footprint.
+implementation with a small dependency footprint (MIT licensed).
 
 ## Usage
 
