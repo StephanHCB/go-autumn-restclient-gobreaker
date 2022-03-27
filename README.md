@@ -27,7 +27,19 @@ implementation with a small dependency footprint (MIT licensed).
 
 ## Usage
 
-TODO
+Change the set up of your rest client like this:
+
+```
+httpClient, _ := auresthttpclient.New(...)
+requestLoggingClient := aurestlogging.New(httpClient)
+
+// this line adds the circuit breaker to the stack (not all parameters shown)
+cbClient := aurestbreaker.New(requestLoggingClient, <a bunch of parameters go here, see New()>)
+
+retryingClient := aurestretry.New(cbClient, ...)
+```
+
+You should usually insert the cbClient above the request logger and below the retryer.
 
 ## Logging
 
