@@ -30,13 +30,15 @@ implementation with a small dependency footprint (MIT licensed).
 Change the set up of your rest client like this:
 
 ```
-httpClient, _ := auresthttpclient.New(...)
-requestLoggingClient := aurestlogging.New(httpClient)
+// [...]
 
-// this line adds the circuit breaker to the stack (not all parameters shown)
-cbClient := aurestbreaker.New(requestLoggingClient, <a bunch of parameters go here, see New()>)
+var circuitBreakerName string = "some-name"
+var maxNumRequestsInHalfOpenState uint32 = 100
+var counterClearingIntervalWhileClosed time.Duration = 5 * time.Minute
+var timeUntilHalfopenAfterOpen time.Duration = 60 * time.Second
+var requestTimeout time.Duration = 15 * time.Second
 
-retryingClient := aurestretry.New(cbClient, ...)
+circuitBreakerClient := aurestbreaker.New(httpClient, circuitBreakerName, maxNumRequestsInHalfOpenState, counterClearingIntervalWhileClosed, timeUntilHalfopenAfterOpen, requestTimeout)
 ```
 
 You should usually insert the cbClient above the request logger and below the retryer.
