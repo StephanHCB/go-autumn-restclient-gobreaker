@@ -10,11 +10,20 @@ import (
 	"time"
 )
 
+// StateChangeCallbackFunction allows you to instrument the circuit breaker.
+type StateChangeCallbackFunction func(circuitBreakerName string, state string)
+
+type CountsCallbackFunction func(circuitBreakerName string, counts gobreaker.Counts)
+
 type Impl struct {
 	Wrapped aurestclientapi.Client
 
-	CB *gobreaker.CircuitBreaker
+	Name           string
+	CB             *gobreaker.CircuitBreaker
 	RequestTimeout time.Duration
+
+	StateChangeCallback StateChangeCallbackFunction
+	CountsCallback      CountsCallbackFunction
 }
 
 func New(
@@ -25,16 +34,25 @@ func New(
 	timeUntilHalfopenAfterOpen time.Duration,
 	requestTimeout time.Duration,
 ) aurestclientapi.Client {
+	instance := &Impl{
+		Wrapped:             wrapped,
+		Name:                circuitBreakerName,
+		RequestTimeout:      requestTimeout,
+		StateChangeCallback: doNothingStateChangeCallback,
+		CountsCallback:      doNothingCountsCallback,
+	}
+
 	settings := gobreaker.Settings{
-		Name:          circuitBreakerName,
-		MaxRequests:   maxNumRequestsInHalfOpenState,
-		Interval:      counterClearingIntervalWhileClosed,
-		Timeout:       timeUntilHalfopenAfterOpen, // NOT the request timeout
-		ReadyToTrip:   nil,
+		Name:        circuitBreakerName,
+		MaxRequests: maxNumRequestsInHalfOpenState,
+		Interval:    counterClearingIntervalWhileClosed,
+		Timeout:     timeUntilHalfopenAfterOpen, // NOT the request timeout
+		ReadyToTrip: nil,
 		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
 			if aulogging.Logger != nil {
 				aulogging.Logger.NoCtx().Warn().Printf("circuit breaker %s state change %s -> %s", name, from.String(), to.String())
 			}
+			instance.StateChangeCallback(name, to.String())
 		},
 		IsSuccessful: func(err error) bool {
 			if err == nil {
@@ -43,17 +61,42 @@ func New(
 			return aurestnontripping.Is(err)
 		},
 	}
-	instance := &Impl{
-		Wrapped:        wrapped,
-		CB:             gobreaker.NewCircuitBreaker(settings),
-		RequestTimeout: requestTimeout,
-	}
+	instance.CB = gobreaker.NewCircuitBreaker(settings)
 
 	if aulogging.Logger != nil {
 		aulogging.Logger.NoCtx().Info().Printf("circuit breaker %s set up", circuitBreakerName)
 	}
 
 	return instance
+}
+
+// Instrument adds instrumentation.
+//
+// Either of the callbacks may be nil.
+func Instrument(
+	client aurestclientapi.Client,
+	stateChangeCallback StateChangeCallbackFunction,
+	countsCallback CountsCallbackFunction,
+) {
+	cbClient, ok := client.(*Impl)
+	if !ok {
+		return
+	}
+
+	if stateChangeCallback != nil {
+		cbClient.StateChangeCallback = stateChangeCallback
+	}
+	if countsCallback != nil {
+		cbClient.CountsCallback = countsCallback
+	}
+}
+
+func doNothingStateChangeCallback(_ string, _ string) {
+
+}
+
+func doNothingCountsCallback(_ string, _ gobreaker.Counts) {
+
 }
 
 func (c *Impl) Perform(ctx context.Context, method string, requestUrl string, requestBody interface{}, response *aurestclientapi.ParsedResponse) error {
@@ -73,5 +116,6 @@ func (c *Impl) Perform(ctx context.Context, method string, requestUrl string, re
 
 		return nil, nil
 	})
+	c.CountsCallback(c.Name, c.CB.Counts())
 	return err
 }
