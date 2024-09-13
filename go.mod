@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/StephanHCB/go-autumn-logging v0.4.0
-	github.com/StephanHCB/go-autumn-restclient v0.8.1
+	github.com/StephanHCB/go-autumn-restclient v0.9.0
 	github.com/sony/gobreaker v1.0.0
 )
 
